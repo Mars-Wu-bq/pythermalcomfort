@@ -112,6 +112,18 @@ def test_default_colors_highlight_comfort_and_deemphasize_invalid_area() -> None
         to_rgb("#FAFAFA"), abs=1e-3
     )
 
+    rendered_colors = [fill.get_facecolor()[0][:3] for fill in result.fills]
+    assert any(
+        np.allclose(color, to_rgb("#007D00"), atol=1e-3) for color in rendered_colors
+    )
+    assert (
+        sum(
+            np.allclose(color, to_rgb("#FAFAFA"), atol=1e-3)
+            for color in rendered_colors
+        )
+        == 2
+    )
+
     plt.close(result.fig)
 
 
