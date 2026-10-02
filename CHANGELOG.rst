@@ -4,6 +4,9 @@ Changelog
 Unreleased
 ----------
 
+* Fixed ``vertical_tmp_grad_ppd`` returning negative ``ppd_vg`` values for small
+  gradients or warm thermal sensation; the result is now set to 0 when the
+  logistic model is below the 34.5 % baseline (Liu et al. 2020, eq. 3).
 * Fixed ``AdaptivePlot`` losing or mislabeling legend entries for comfort bands and
   the center line when the legend is rebuilt after adding measured data (#415).
 
