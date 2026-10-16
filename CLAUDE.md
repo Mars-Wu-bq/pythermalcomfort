@@ -35,7 +35,7 @@ pipenv run pytest -k "pmv"
 # Run with coverage
 pipenv run pytest tests/ --cov --cov-report=term-missing -vv
 
-# Full test suite via tox (tests Python 3.10-3.14)
+# Full test suite via tox (tests Python 3.11-3.14)
 pipenv run tox
 
 # Build the docs (do NOT hand-roll a sphinx venv — this env already exists)
@@ -64,7 +64,7 @@ pipenv run pre-commit run --all-files
 ```
 
 ### CI/CD Workflow
-- **Pull Request (development branch)**: Runs the format job on Python 3.13 and the test matrix on Python 3.10 only, for fast feedback. numba's `llvmlite` dependency has no prebuilt wheel for very new Python versions yet (e.g. 3.14), so including them here would build from source on every PR run (~4 min vs ~1 min). The full `3.10`-`3.14` matrix across ubuntu/macos/windows runs in `build-test-publish.yml` on every release tag instead, so full compatibility is still verified before anything ships.
+- **Pull Request (development branch)**: Runs the format job on Python 3.13 and the test matrix on Python 3.11 only, for fast feedback. numba's `llvmlite` dependency has no prebuilt wheel for very new Python versions yet (e.g. 3.14), so including them here would build from source on every PR run (~4 min vs ~1 min). The full `3.11`-`3.14` matrix across ubuntu/macos/windows runs in `build-test-publish.yml` on every release tag instead, so full compatibility is still verified before anything ships.
 - **Tag `v*rc*` on development**: Runs tests and deploys to TestPyPI
 - **Tag `v*` (non-RC) on master**: Runs full test matrix and deploys to PyPI
 
@@ -303,7 +303,7 @@ including a parity check for `models/__init__.py` that no test covers.
 | `setup.py` | Package metadata, dependencies, entry points |
 | `ruff.toml` | Linting and formatting rules (Black-compatible) |
 | `.pre-commit-config.yaml` | Pre-commit hooks (ruff format/check) |
-| `tox.ini` | Test environments for Python 3.10-3.13 |
+| `tox.ini` | Test environments for Python 3.11-3.14 |
 | `.github/workflows/pull-request.yml` | CI for PRs to development branch |
 | `.github/workflows/build-test-publish.yml` | Full CI + PyPI publish on master push |
 | `pythermalcomfort/__init__.py` | Package version and public API |
