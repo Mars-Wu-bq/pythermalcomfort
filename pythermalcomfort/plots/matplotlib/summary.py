@@ -498,6 +498,11 @@ class SummaryPlot(BasePlot):
             from the Rothfusz/Schoen models, both with right-closed intervals.
             UTCI and Heat Index values must be in degrees Celsius. Presets classify
             already-computed values; they do not check model applicability limits.
+            For Heat Index, compute values with ``round_output=False`` when the
+            summary must match the model's ``stress_category``. Those models
+            classify before rounding, so rounded values can cross a boundary.
+            To summarize categories already returned by a model, use
+            :meth:`set_categories` instead.
             Override ``output``, ``labels`` or ``colors`` as needed. Use the existing
             explicit configuration without a preset to customize thresholds.
 

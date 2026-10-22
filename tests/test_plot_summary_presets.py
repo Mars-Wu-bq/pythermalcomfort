@@ -10,7 +10,12 @@ import pytest
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from pythermalcomfort.models import heat_index_rothfusz, pmv_ppd_iso, utci
+from pythermalcomfort.models import (
+    heat_index_rothfusz,
+    heat_index_schoen,
+    pmv_ppd_iso,
+    utci,
+)
 from pythermalcomfort.plots.matplotlib import SummaryPlot
 from pythermalcomfort.plots.matplotlib.summary import _compute_region_percentages
 
@@ -126,6 +131,32 @@ def test_preset_agrees_with_model_categories(preset):
     expected = frame["category"].value_counts(normalize=True).mul(100).round(1)
     expected = expected.reindex(plotted.percentages.index, fill_value=0)
     pd.testing.assert_series_equal(plotted.percentages, expected, check_names=False)
+
+
+@pytest.mark.parametrize(
+    ("model", "tdb"),
+    [(heat_index_rothfusz, 28.68), (heat_index_schoen, 28.794)],
+)
+def test_heat_index_rounding_near_boundary(model, tdb):
+    """Unrounded Heat Index preserves model categories near a rounding boundary."""
+    raw = model(tdb=tdb, rh=70, round_output=False)
+    rounded = model(tdb=tdb, rh=70)
+    assert 32 < raw.hi < 32.05
+    assert rounded.hi == 32
+    assert raw.stress_category == rounded.stress_category == "extreme caution"
+
+    raw_summary = (
+        SummaryPlot(pd.DataFrame({"hi": [float(raw.hi)]}))
+        .set_regions(preset="heat_index")
+        .plot()
+    )
+    rounded_summary = (
+        SummaryPlot(pd.DataFrame({"hi": [float(rounded.hi)]}))
+        .set_regions(preset="heat_index")
+        .plot()
+    )
+    assert raw_summary.percentages.loc["extreme caution"] == 100
+    assert rounded_summary.percentages.loc["caution"] == 100
 
 
 def test_preset_overrides_and_switching():
