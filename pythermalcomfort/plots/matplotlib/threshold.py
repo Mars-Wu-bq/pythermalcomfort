@@ -33,6 +33,7 @@ from pythermalcomfort.plots.matplotlib._shared import (
     _apply_axes_style,
     _apply_font_family,
     _AxisConfig,
+    _caller_texts,
     _configure_regions,
     _legend_anchor_y,
     _plot_rc,
@@ -366,7 +367,7 @@ class ThresholdPlot(GridBasePlot):
         omitting ``resolution`` gives a chart that is already smooth.
         """
         with mpl.rc_context(_plot_rc(font_family)):
-            existing_annotations = frozenset(ax.texts) if ax is not None else ()
+            existing_annotations = _caller_texts(ax)
             self._validate_plot_inputs(fill_kws=fill_kws)
             self._validate_invalid_color(invalid_color)
 

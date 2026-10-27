@@ -10,6 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
+from matplotlib.offsetbox import AnchoredText
 from matplotlib.text import Text
 
 from pythermalcomfort.models import adaptive_ashrae, pmv_ppd_iso
@@ -85,6 +86,9 @@ def test_per_plot_font_family(
         "Existing annotation",
         fontfamily="serif",
     )
+    anchored = AnchoredText("Anchored note", loc="upper left", prop={"family": "serif"})
+    ax.add_artist(anchored)
+    anchored_texts = anchored.findobj(match=Text)
     original_family = list(matplotlib.rcParams["font.family"])
 
     result = plot_factory().plot(
@@ -97,7 +101,9 @@ def test_per_plot_font_family(
     visible_text = [
         text
         for text in result.ax.findobj(match=Text)
-        if text is not annotation and text.get_text().strip()
+        if text is not annotation
+        and text not in anchored_texts
+        and text.get_text().strip()
     ]
     assert visible_text
     assert all(text.get_fontfamily() == expected_family for text in visible_text)
@@ -106,6 +112,8 @@ def test_per_plot_font_family(
     else:
         assert annotation in result.ax.texts
         assert annotation.get_fontfamily() == ["serif"]
+        assert anchored in result.ax.artists
+        assert all(text.get_fontfamily() == ["serif"] for text in anchored_texts)
     assert list(matplotlib.rcParams["font.family"]) == original_family
 
 

@@ -10,6 +10,29 @@ Unreleased
   label shows both limits, and out-of-model areas use a lighter contrasting gray.
   Explicit labels, region colors, and invalid-area colors remain authoritative, and
   non-default PMV thresholds retain the shared plot palette (#417).
+
+4.7.0 (2026-10-27)
+------------------
+
+* Fixed a discontinuity in SET from ``two_nodes_gagge``, ``set_tmp`` and
+  ``two_nodes_gagge_sleep``. When skin wettedness reached its maximum ``w_max``, the
+  model set the regulatory sweating fraction to ``w_max / 0.94`` instead of
+  ``(w_max - 0.06) / 0.94``, so the skin lost about 8 % more heat by evaporation than
+  just below the cap. SET could jump by up to 0.5 °C for a 0.001 °C change in air
+  temperature. The new formula follows Gagge et al. (1986) and JOS-3, and deliberately
+  departs from the ASHRAE 55 reference code, which has the same error. Results change
+  only where wettedness reaches ``w_max``, mostly hot conditions with high metabolic
+  rates. For example, ``cooling_effect`` returns 5.11 °C instead of 5.14 °C at
+  35 °C, 90 % RH, 1.5 m/s, 2.5 met and 0.2 clo, and ``disc`` is now exactly 4.7 at
+  the cap instead of 5.3-6.0.
+  ``pmv_ppd_ashrae`` (through the cooling effect) and ``use_fans_heatwaves`` results
+  change in the same conditions.
+  ``two_nodes_gagge`` now rejects a user-supplied ``w_max`` of 0.06 or less, above 1,
+  NaN or ``True``, also inside a list such as ``[True, 0.5]``. Below 0.06 the
+  sweating rate at the cap would be negative, and at exactly 0.06 ``disc`` divided by
+  zero. ``False`` and ``0`` still mean that the model computes ``w_max`` from ``v``
+  and ``clo`` (`#489
+  <https://github.com/pythermalcomfort/pythermalcomfort/issues/489>`_).
 * Fixed the IP cooling effect conversion to use the Celsius-to-Fahrenheit
   temperature difference factor of 1.8 (`#473
   <https://github.com/pythermalcomfort/pythermalcomfort/issues/473>`_).

@@ -15,6 +15,7 @@ from pythermalcomfort.plots.matplotlib._shared import (
     _apply_default_links_to_kwargs,
     _apply_font_family,
     _AxisConfig,
+    _caller_texts,
     _extract_output_by_name,
     _parse_axis_range,
     _PlotDefaults,
@@ -406,7 +407,7 @@ class PsychrometricPlot(ThresholdPlot):
         ThresholdPlotResult
             Result with axis and artist handles.
         """
-        existing_annotations = frozenset(ax.texts) if ax is not None else ()
+        existing_annotations = _caller_texts(ax)
         result = super().plot(
             ax=ax,
             title=title,

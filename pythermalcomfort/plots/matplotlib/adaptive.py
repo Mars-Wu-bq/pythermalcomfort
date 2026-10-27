@@ -32,6 +32,7 @@ from pythermalcomfort.plots.matplotlib._base import BasePlot
 from pythermalcomfort.plots.matplotlib._shared import (
     BasePlotResult,
     _apply_font_family,
+    _caller_texts,
     _limit_labeled_ticks,
     _plot_rc,
     _PlotDefaults,
@@ -533,7 +534,7 @@ class AdaptivePlot(BasePlot):
             Result with figure, axes, and artists.
         """
         with mpl.rc_context(_plot_rc(font_family)):
-            existing_annotations = frozenset(ax.texts) if ax is not None else ()
+            existing_annotations = _caller_texts(ax)
             bands = self._resolve_bands()
 
             if ax is None:
