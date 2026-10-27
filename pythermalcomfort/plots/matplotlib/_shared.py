@@ -220,6 +220,21 @@ def _plot_rc(font_family: str | Sequence[str] | None = None) -> dict[str, Any]:
     return rc
 
 
+def _caller_texts(ax: Axes | None) -> frozenset[Text]:
+    """Return the text artists a caller added to ``ax`` before plotting.
+
+    These are ``ax.texts`` plus text inside artists added with
+    ``ax.add_artist()``, such as an ``AnchoredText`` box, so that
+    ``_apply_font_family`` leaves them in the font the caller chose.
+    """
+    if ax is None:
+        return frozenset()
+    texts = set(ax.texts)
+    for artist in ax.artists:
+        texts.update(artist.findobj(match=Text))
+    return frozenset(texts)
+
+
 def _apply_font_family(
     ax: Axes,
     font_family: str | Sequence[str] | None,
