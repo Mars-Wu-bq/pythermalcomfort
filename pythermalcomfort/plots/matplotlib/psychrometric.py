@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -13,6 +13,7 @@ from matplotlib.path import Path as MplPath
 from pythermalcomfort.plots.matplotlib._shared import (
     _PSYCHROMETRIC_REGION_PRESETS,
     _apply_default_links_to_kwargs,
+    _apply_font_family,
     _AxisConfig,
     _extract_output_by_name,
     _parse_axis_range,
@@ -359,6 +360,7 @@ class PsychrometricPlot(ThresholdPlot):
         fill_kws: Mapping[str, Any] | None = None,
         legend_kws: Mapping[str, Any] | None = None,
         invalid_color: str = _PlotDefaults.Psychrometric.color_out_of_model,
+        font_family: str | Sequence[str] | None = None,
     ) -> ThresholdPlotResult:
         """Render the psychrometric chart with threshold regions and RH curves.
 
@@ -394,12 +396,17 @@ class PsychrometricPlot(ThresholdPlot):
         invalid_color : str
             Color used for out-of-model/invalid areas. Defaults to the
             psychrometric-specific light gray ``"#DADCDD"``.
+        font_family : str or sequence of str, optional
+            Font family for this plot. If omitted, Matplotlib's current
+            ``font.family`` setting is used. Existing annotations on a
+            caller-supplied ``ax`` are not modified.
 
         Returns
         -------
         ThresholdPlotResult
             Result with axis and artist handles.
         """
+        existing_annotations = frozenset(ax.texts) if ax is not None else ()
         result = super().plot(
             ax=ax,
             title=title,
@@ -409,6 +416,7 @@ class PsychrometricPlot(ThresholdPlot):
             fill_kws=fill_kws,
             legend_kws=legend_kws,
             invalid_color=invalid_color,
+            font_family=font_family,
         )
         ax = result.ax
         x_axis, y_axis = self._require_axes()
@@ -512,5 +520,6 @@ class PsychrometricPlot(ThresholdPlot):
         # overlays drawn since, none of which currently autoscale.
         ax.set_xlim(x_axis.min_val, x_axis.max_val)
         ax.set_ylim(y_axis.min_val, y_axis.max_val)
+        _apply_font_family(ax, font_family, exclude=existing_annotations)
 
         return result

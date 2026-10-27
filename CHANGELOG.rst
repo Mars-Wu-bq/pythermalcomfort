@@ -10,6 +10,18 @@ Unreleased
   label shows both limits, and out-of-model areas use a lighter contrasting gray.
   Explicit labels, region colors, and invalid-area colors remain authoritative, and
   non-default PMV thresholds retain the shared plot palette (#417).
+* Fixed the IP cooling effect conversion to use the Celsius-to-Fahrenheit
+  temperature difference factor of 1.8 (`#473
+  <https://github.com/pythermalcomfort/pythermalcomfort/issues/473>`_).
+* ``JOS3.t_core`` now has a setter, like ``t_skin``: ``model.t_core = 38.0`` sets the
+  core temperatures of all 17 segments (a scalar, an array of 17 values, or a dict of
+  body parts). Before, it raised ``AttributeError``. The ``t_core`` and ``t_skin``
+  docstrings now say that the returned arrays are copies, so ``model.t_core[:] = x``
+  does not change the model (`#481
+  <https://github.com/pythermalcomfort/pythermalcomfort/issues/481>`_).
+* Matplotlib plotting classes now accept ``font_family`` in ``plot()`` for a
+  per-chart font override while continuing to respect the global Matplotlib
+  ``font.family`` setting (#454).
 * Dropped support for Python 3.10, which reached end of life in October 2026.
   pythermalcomfort now requires Python 3.11 or later. Users on Python 3.10 keep
   getting 4.6.2 from pip.
