@@ -11,7 +11,7 @@ from matplotlib.axes import Axes
 from matplotlib.path import Path as MplPath
 
 from pythermalcomfort.plots.matplotlib._shared import (
-    _PSYCHROMETRIC_REGION_PRESETS,
+    _PSYCHROMETRIC_REGION_COLORS,
     _apply_default_links_to_kwargs,
     _apply_font_family,
     _AxisConfig,
@@ -140,7 +140,7 @@ class PsychrometricPlot(ThresholdPlot):
         )
     """
 
-    _region_presets = _PSYCHROMETRIC_REGION_PRESETS
+    _region_palette = _PSYCHROMETRIC_REGION_COLORS
 
     def set_x_axis(
         self,

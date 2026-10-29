@@ -416,14 +416,6 @@ class RegionConfig:
     colors: list[str]
 
 
-@dataclass(frozen=True)
-class _RegionPreset:
-    """Declarative defaults for one model output and threshold combination."""
-
-    labels: tuple[str, ...]
-    colors: tuple[str, ...]
-
-
 @dataclass
 class BasePlotResult:
     """Minimal result handle shared by all plot types.
@@ -570,8 +562,14 @@ def _build_region_labels(
     output: str,
     levels: Sequence[float],
     labels: Sequence[str] | None = None,
+    right: bool = False,
 ) -> list[str]:
-    """Build labels for threshold regions from already-normalized levels."""
+    """Build labels for threshold regions from already-normalized levels.
+
+    ``right`` says on which side of each boundary a value exactly on it falls, as in
+    :class:`~pythermalcomfort._internal.validation._CategoryBins`. If False the labels
+    read ``a ≤ X < b``, and if True ``a < X ≤ b``.
+    """
     output_name = output.strip()
     if not output_name:
         raise ValueError("output must be a non-empty string.")
@@ -586,10 +584,11 @@ def _build_region_labels(
         return [str(label) for label in labels]
 
     out_name = output_name.upper()
-    region_labels = [f"{out_name} < {levels[0]:g}"]
+    below, above = ("≤", "<") if right else ("<", "≤")
+    region_labels = [f"{out_name} {below} {levels[0]:g}"]
     for lower, upper in zip(levels, levels[1:], strict=False):
-        region_labels.append(f"{lower:g} ≤ {out_name} < {upper:g}")
-    region_labels.append(f"{out_name} ≥ {levels[-1]:g}")
+        region_labels.append(f"{lower:g} {above} {out_name} {below} {upper:g}")
+    region_labels.append(f"{out_name} {'>' if right else '≥'} {levels[-1]:g}")
     return region_labels
 
 
@@ -614,23 +613,17 @@ _DEFAULT_REGION_COLORS: dict[int, tuple[str, ...]] = {
     ),
 }
 
-_EMPTY_REGION_PRESETS: Mapping[tuple[str, tuple[float, ...]], _RegionPreset] = (
-    MappingProxyType({})
-)
-
-_PSYCHROMETRIC_REGION_PRESETS: Mapping[tuple[str, tuple[float, ...]], _RegionPreset] = (
-    MappingProxyType(
-        {
-            ("pmv", (-0.5, 0.5)): _RegionPreset(
-                labels=("PMV < -0.5", "-0.5 ≤ PMV ≤ 0.5", "PMV > 0.5"),
-                colors=("#86AEC8", "#4CB15E", "#D88B7B"),
-            )
-        }
-    )
+# Psychrometric charts usually show one comfort band between two thresholds, so its
+# three-region palette marks the middle band green instead of neutral gray.
+_PSYCHROMETRIC_REGION_COLORS: Mapping[int, tuple[str, ...]] = MappingProxyType(
+    {**_DEFAULT_REGION_COLORS, 3: ("#86AEC8", "#4CB15E", "#D88B7B")}
 )
 
 
-def _default_region_colors(n_regions: int) -> list[str]:
+def _default_region_colors(
+    n_regions: int,
+    palette: Mapping[int, tuple[str, ...]] = _DEFAULT_REGION_COLORS,
+) -> list[str]:
     """Return muted default colors from cool blue to warm terracotta.
 
     Palettes with an odd number of regions place neutral gray in the central band. Even
@@ -641,12 +634,10 @@ def _default_region_colors(n_regions: int) -> list[str]:
     if n_regions < 1:
         raise ValueError("n_regions must be at least 1.")
 
-    if n_regions in _DEFAULT_REGION_COLORS:
-        return list(_DEFAULT_REGION_COLORS[n_regions])
+    if n_regions in palette:
+        return list(palette[n_regions])
 
-    cmap = mcolors.LinearSegmentedColormap.from_list(
-        "cool_neutral_warm", _DEFAULT_REGION_COLORS[7]
-    )
+    cmap = mcolors.LinearSegmentedColormap.from_list("cool_neutral_warm", palette[7])
     positions = np.linspace(0.0, 1.0, n_regions)
     return [mcolors.to_hex(cmap(value)) for value in positions]
 
@@ -655,10 +646,11 @@ def _resolve_region_colors(
     *,
     n_regions: int,
     colors: Sequence[str] | None = None,
+    palette: Mapping[int, tuple[str, ...]] = _DEFAULT_REGION_COLORS,
 ) -> list[str]:
     """Resolve user or default region colors and validate length/format."""
     if colors is None:
-        return _default_region_colors(n_regions)
+        return _default_region_colors(n_regions, palette)
 
     resolved = [str(color) for color in colors]
     if len(resolved) != n_regions:
@@ -680,9 +672,8 @@ def _configure_regions(
     thresholds: Sequence[float],
     labels: Sequence[str] | None = None,
     colors: Sequence[str] | None = None,
-    presets: Mapping[
-        tuple[str, tuple[float, ...]], _RegionPreset
-    ] = _EMPTY_REGION_PRESETS,
+    right: bool = False,
+    palette: Mapping[int, tuple[str, ...]] = _DEFAULT_REGION_COLORS,
 ) -> RegionConfig:
     """Validate inputs and build a :class:`RegionConfig`.
 
@@ -701,9 +692,11 @@ def _configure_regions(
     colors : sequence of str, optional
         Matplotlib-compatible color for every region.  Must have length
         ``len(thresholds) + 1`` when provided.
-    presets : mapping, optional
-        Declarative defaults keyed by lower-case output name and normalized
-        thresholds. Explicit ``labels`` and ``colors`` take precedence.
+    right : bool, optional
+        If True, the default labels put a value exactly on a boundary in the lower
+        region (``a < X ≤ b``), otherwise in the upper one (``a ≤ X < b``).
+    palette : mapping, optional
+        Default colors keyed by number of regions, used when ``colors`` is None.
 
     Returns
     -------
@@ -724,17 +717,11 @@ def _configure_regions(
         raise ValueError("output must be a non-empty string.")
 
     normalized_levels = _normalize_levels(thresholds)
-    preset = presets.get((output_name.casefold(), tuple(normalized_levels)))
-    preset_labels = getattr(preset, "labels", None)
-    preset_colors = getattr(preset, "colors", None)
     region_labels = _build_region_labels(
-        output=output_name,
-        levels=normalized_levels,
-        labels=labels if labels is not None else preset_labels,
+        output=output_name, levels=normalized_levels, labels=labels, right=right
     )
     region_colors = _resolve_region_colors(
-        n_regions=len(normalized_levels) + 1,
-        colors=colors if colors is not None else preset_colors,
+        n_regions=len(normalized_levels) + 1, colors=colors, palette=palette
     )
 
     return RegionConfig(

@@ -7,8 +7,12 @@ import pytest
 from matplotlib.collections import PolyCollection
 from matplotlib.colors import to_rgb, to_rgba
 
-from pythermalcomfort.models import pmv_ppd_iso
-from pythermalcomfort.plots.matplotlib import PsychrometricPlot, ThresholdPlotResult
+from pythermalcomfort.models import pmv_ppd_ashrae, pmv_ppd_iso
+from pythermalcomfort.plots.matplotlib import (
+    PsychrometricPlot,
+    ThresholdPlot,
+    ThresholdPlotResult,
+)
 from pythermalcomfort.psychrometrics import hr_to_rh, psy_ta_rh
 
 
@@ -129,8 +133,8 @@ def test_default_colors_highlight_comfort_and_deemphasize_invalid_area() -> None
     plt.close(result.fig)
 
 
-def test_default_pmv_labels_include_both_neutral_boundaries() -> None:
-    """The neutral PMV legend label includes both comfort limits."""
+def test_default_pmv_labels_follow_the_model_closure() -> None:
+    """pmv_ppd_iso puts a PMV of exactly 0.5 in the upper region, and the labels say so."""
     plot = _new_plot()
     plot.set_x_axis("tdb", 10.0, 40.0, resolution=1.0)
     plot.set_y_axis("hr", 0.0, 30.0, resolution=2.0)
@@ -140,11 +144,47 @@ def test_default_pmv_labels_include_both_neutral_boundaries() -> None:
     assert result.legend is not None
     assert [text.get_text() for text in result.legend.get_texts()[:3]] == [
         "PMV < -0.5",
-        "-0.5 ≤ PMV ≤ 0.5",
-        "PMV > 0.5",
+        "-0.5 ≤ PMV < 0.5",
+        "PMV ≥ 0.5",
     ]
 
     plt.close(result.fig)
+
+
+def test_right_closed_model_labels_put_the_edge_in_the_lower_region() -> None:
+    """pmv_ppd_ashrae puts a PMV of exactly 0.5 in the neutral region (#382)."""
+    plot = PsychrometricPlot(pmv_ppd_ashrae).set_regions(
+        output="pmv", thresholds=[-0.5, 0.5]
+    )
+    assert plot._region_config.labels == [
+        "PMV ≤ -0.5",
+        "-0.5 < PMV ≤ 0.5",
+        "PMV > 0.5",
+    ]
+
+
+def test_outputs_not_in_the_model_registry_keep_left_closed_labels() -> None:
+    plot = PsychrometricPlot(pmv_ppd_ashrae).set_regions(output="ppd", thresholds=[10])
+    assert plot._region_config.labels == ["PPD < 10", "PPD ≥ 10"]
+
+
+@pytest.mark.parametrize(
+    ("output", "thresholds"),
+    [("pmv", [-0.5, 0.5]), ("pmv", [-1, 1]), ("ppd", [10, 20])],
+)
+def test_three_region_psychrometric_palette_marks_the_band_green(
+    output: str, thresholds: list[float]
+) -> None:
+    """The green band does not depend on matching a particular output or thresholds."""
+    plot = PsychrometricPlot(pmv_ppd_iso).set_regions(
+        output=output, thresholds=thresholds
+    )
+    assert plot._region_config.colors == ["#86AEC8", "#4CB15E", "#D88B7B"]
+
+
+def test_threshold_plot_keeps_the_neutral_gray_band() -> None:
+    plot = ThresholdPlot(pmv_ppd_iso).set_regions(output="pmv", thresholds=[-0.5, 0.5])
+    assert plot._region_config.colors == ["#86AEC8", "#F1F3F2", "#D88B7B"]
 
 
 def test_custom_region_and_invalid_colors_are_preserved() -> None:
@@ -180,7 +220,7 @@ def test_custom_region_and_invalid_colors_are_preserved() -> None:
     plt.close(result.fig)
 
 
-def test_default_pmv_preset_preserves_independent_overrides() -> None:
+def test_default_labels_and_colors_are_overridden_independently() -> None:
     """Custom labels and colors independently override their preset values."""
     custom_labels = ["Cool", "Neutral", "Warm"]
     custom_colors = ["#111111", "#222222", "#333333"]
@@ -200,8 +240,8 @@ def test_default_pmv_preset_preserves_independent_overrides() -> None:
     assert labels_plot._region_config.colors == ["#86AEC8", "#4CB15E", "#D88B7B"]
     assert colors_plot._region_config.labels == [
         "PMV < -0.5",
-        "-0.5 ≤ PMV ≤ 0.5",
-        "PMV > 0.5",
+        "-0.5 ≤ PMV < 0.5",
+        "PMV ≥ 0.5",
     ]
     assert colors_plot._region_config.colors == custom_colors
 
