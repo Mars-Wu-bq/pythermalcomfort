@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
 import matplotlib as mpl
@@ -16,7 +17,14 @@ from matplotlib.figure import Figure
 from matplotlib.legend import Legend
 from matplotlib.patches import Patch
 
+from pythermalcomfort.models import (
+    heat_index_rothfusz,
+    pmv_ppd_ashrae,
+    pmv_ppd_iso,
+    utci,
+)
 from pythermalcomfort.plots.matplotlib._base import BasePlot
+from pythermalcomfort.plots.matplotlib._model_regions import _get_model_regions
 from pythermalcomfort.plots.matplotlib._shared import (
     BasePlotResult,
     _apply_font_family,
@@ -26,52 +34,22 @@ from pythermalcomfort.plots.matplotlib._shared import (
     _PlotDefaults,
 )
 
+# Preset names accepted by SummaryPlot.set_regions. Each one shows the categories of a
+# model, so its thresholds, labels and boundary closure come from the model registry.
+_PRESET_MODELS: Mapping[str, Callable[..., Any]] = MappingProxyType(
+    {
+        "pmv_iso": pmv_ppd_iso,
+        "pmv_ashrae": pmv_ppd_ashrae,
+        "utci": utci,
+        # heat_index_schoen uses the same categories
+        "heat_index": heat_index_rothfusz,
+    }
+)
 
-@dataclass(frozen=True)
-class _RegionPreset:
-    """Default configuration for a standard continuous model output."""
-
-    output: str
-    thresholds: tuple[float, ...]
-    labels: tuple[str, ...]
-    right: bool = False
-    colors: tuple[str, ...] | None = None
-
-
-# Classifications follow pmv_ppd_iso.tsv, utci.stress_category and the
-# Rothfusz/Schoen Heat Index stress categories, respectively. The final mapping
-# sentinels (10 for PMV, 1000 for temperature) are not internal region boundaries.
-_REGION_PRESETS = {
-    "pmv": _RegionPreset(
-        output="pmv",
-        thresholds=(-2.5, -1.5, -0.5, 0.5, 1.5, 2.5),
-        labels=(
-            "Cold",
-            "Cool",
-            "Slightly Cool",
-            "Neutral",
-            "Slightly Warm",
-            "Warm",
-            "Hot",
-        ),
-    ),
-    "utci": _RegionPreset(
-        output="utci",
-        thresholds=(-40, -27, -13, 0, 9, 26, 32, 38, 46),
-        labels=(
-            "extreme cold stress",
-            "very strong cold stress",
-            "strong cold stress",
-            "moderate cold stress",
-            "slight cold stress",
-            "no thermal stress",
-            "moderate heat stress",
-            "strong heat stress",
-            "very strong heat stress",
-            "extreme heat stress",
-        ),
-        right=True,
-        colors=(
+# Default colors of the presets that do not use the shared cool-to-warm palette.
+_PRESET_COLORS: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        "utci": (
             "#313695",
             "#4575B4",
             "#74ADD1",
@@ -83,15 +61,9 @@ _REGION_PRESETS = {
             "#F46D43",
             "#A50026",
         ),
-    ),
-    "heat_index": _RegionPreset(
-        output="hi",
-        thresholds=(27, 32, 41, 54),
-        labels=("no risk", "caution", "extreme caution", "danger", "extreme danger"),
-        right=True,
-        colors=("#FFFFB2", "#FECC5C", "#FD8D3C", "#F03B20", "#BD0026"),
-    ),
-}
+        "heat_index": ("#FFFFB2", "#FECC5C", "#FD8D3C", "#F03B20", "#BD0026"),
+    }
+)
 
 # ── result container ───────────────────────────────────────────────────────
 
@@ -492,20 +464,26 @@ class SummaryPlot(BasePlot):
         colors : sequence of str, optional
             Region colors.  Must have length ``len(thresholds) + 1`` when
             provided.
-        preset : {"pmv", "utci", "heat_index"}, optional
-            Standard thresholds, labels and colors. PMV uses the seven thermal
-            sensation categories from ``pmv_ppd_iso`` with left-closed intervals.
-            UTCI uses ten stress categories and Heat Index uses five risk categories
-            from the Rothfusz/Schoen models, both with right-closed intervals.
-            UTCI and Heat Index values must be in degrees Celsius. Presets classify
-            already-computed values; they do not check model applicability limits.
-            For Heat Index, compute values with ``round_output=False`` when the
-            summary must match the model's ``stress_category``. Those models
-            classify before rounding, so rounded values can cross a boundary.
-            To summarize categories already returned by a model, use
-            :meth:`set_categories` instead.
-            Override ``output``, ``labels`` or ``colors`` as needed. Use the existing
-            explicit configuration without a preset to customize thresholds.
+        preset : {"pmv_iso", "pmv_ashrae", "utci", "heat_index"}, optional
+            Show the categories of a model: the seven thermal sensation categories of
+            ``pmv_ppd_iso`` or ``pmv_ppd_ashrae``, the ten stress categories of
+            ``utci``, or the five risk categories of ``heat_index_rothfusz`` and
+            ``heat_index_schoen``. Thresholds, labels and which region a value exactly
+            on a threshold falls in are taken from the model, so the summary matches
+            the model's own category output. ``pmv_iso`` puts a PMV of exactly 0.5 in
+            "Slightly Warm", while ``pmv_ashrae`` puts it in "Neutral".
+
+            UTCI and Heat Index values must be in °C. A column computed with
+            ``units="IP"`` is classified wrongly without any error, so convert it to
+            °C first or pass your own ``thresholds``.
+
+            Presets classify already-computed values and do not check the model's
+            applicability limits. The Heat Index models classify before rounding, so
+            compute values with ``round_output=False`` when the summary must match
+            their ``stress_category``. To summarize categories already returned by a
+            model, use :meth:`set_categories` instead. ``output``, ``labels`` and
+            ``colors`` can be overridden. ``thresholds`` cannot be combined with a
+            preset.
 
         Returns
         -------
@@ -522,24 +500,31 @@ class SummaryPlot(BasePlot):
 
         Examples
         --------
-        >>> df = pd.DataFrame({"pmv": [-1.0, 0.0, 1.0]})
-        >>> chart = SummaryPlot(df).set_regions(preset="pmv")
+        .. code-block:: python
+
+            import pandas as pd
+
+            from pythermalcomfort.plots.matplotlib import SummaryPlot
+
+            df = pd.DataFrame({"pmv": [-1.0, 0.0, 0.5, 1.0]})
+            result = SummaryPlot(df).set_regions(preset="pmv_iso").plot()
+            print(result.percentages)
         """
         right = False
         if preset is not None:
             if not isinstance(preset, str):
                 raise TypeError("preset must be a string.")
-            if preset not in _REGION_PRESETS:
-                msg = f"Unknown preset {preset!r}. Choose from {', '.join(_REGION_PRESETS)}."
+            if preset not in _PRESET_MODELS:
+                msg = f"Unknown preset {preset!r}. Choose from {', '.join(_PRESET_MODELS)}."
                 raise ValueError(msg)
             if thresholds is not None:
                 raise ValueError("preset and thresholds cannot be combined.")
-            defaults = _REGION_PRESETS[preset]
-            output = defaults.output if output is None else output
-            thresholds = defaults.thresholds
-            labels = defaults.labels if labels is None else labels
-            colors = defaults.colors if colors is None else colors
-            right = defaults.right
+            regions = _get_model_regions(_PRESET_MODELS[preset])
+            output = regions.output if output is None else output
+            thresholds = regions.bins.thresholds
+            labels = regions.bins.labels if labels is None else labels
+            colors = _PRESET_COLORS.get(preset) if colors is None else colors
+            right = regions.bins.right
         elif output is None or thresholds is None:
             raise ValueError("output and thresholds are required without a preset.")
 
@@ -550,6 +535,7 @@ class SummaryPlot(BasePlot):
             thresholds=thresholds,
             labels=labels,
             colors=colors,
+            right=right,
         )
         self._categories = None
         self._category_labels = None

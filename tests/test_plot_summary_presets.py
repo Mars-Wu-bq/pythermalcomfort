@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from pythermalcomfort.models import (
     heat_index_rothfusz,
     heat_index_schoen,
+    pmv_ppd_ashrae,
     pmv_ppd_iso,
     utci,
 )
@@ -31,7 +32,7 @@ def close_figures():
     ("preset", "output", "edges", "labels", "right"),
     [
         (
-            "pmv",
+            "pmv_iso",
             "pmv",
             [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5],
             [
@@ -44,6 +45,21 @@ def close_figures():
                 "Hot",
             ],
             False,
+        ),
+        (
+            "pmv_ashrae",
+            "pmv",
+            [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5],
+            [
+                "Cold",
+                "Cool",
+                "Slightly Cool",
+                "Neutral",
+                "Slightly Warm",
+                "Warm",
+                "Hot",
+            ],
+            True,
         ),
         (
             "utci",
@@ -102,12 +118,13 @@ def test_preset_classifies_every_boundary(preset, output, edges, labels, right):
     assert [text.get_text() for text in result.legend.get_texts()] == labels
 
 
-@pytest.mark.parametrize("preset", ["pmv", "utci", "heat_index"])
+@pytest.mark.parametrize("preset", ["pmv_iso", "pmv_ashrae", "utci", "heat_index"])
 def test_preset_agrees_with_model_categories(preset):
     """Compare summary shares with categories returned by actual models."""
     temperatures = np.linspace(-30, 50, 100)
-    if preset == "pmv":
-        result = pmv_ppd_iso(
+    if preset in ("pmv_iso", "pmv_ashrae"):
+        model = pmv_ppd_iso if preset == "pmv_iso" else pmv_ppd_ashrae
+        result = model(
             tdb=temperatures,
             tr=temperatures,
             vr=0.1,
@@ -189,14 +206,19 @@ def test_preset_overrides_and_switching():
     [
         ({"preset": "unknown"}, ValueError, "Unknown preset"),
         ({"preset": []}, TypeError, "preset must be a string"),
-        ({"preset": "pmv", "thresholds": [0]}, ValueError, "cannot be combined"),
+        ({"preset": "pmv_iso", "thresholds": [0]}, ValueError, "cannot be combined"),
         ({}, ValueError, "required without a preset"),
         ({"output": "pmv"}, ValueError, "required without a preset"),
         ({"preset": "utci"}, ValueError, "was not found"),
-        ({"preset": "pmv", "output": ""}, ValueError, "non-empty"),
-        ({"preset": "pmv", "labels": ["A"]}, ValueError, "labels must have length"),
-        ({"preset": "pmv", "colors": ["red"]}, ValueError, "colors must have length"),
-        ({"preset": "pmv", "colors": ["bad"] * 7}, ValueError, "Invalid color"),
+        ({"preset": "pmv_iso", "output": ""}, ValueError, "non-empty"),
+        ({"preset": "pmv"}, ValueError, "Choose from pmv_iso, pmv_ashrae"),
+        ({"preset": "pmv_iso", "labels": ["A"]}, ValueError, "labels must have length"),
+        (
+            {"preset": "pmv_iso", "colors": ["red"]},
+            ValueError,
+            "colors must have length",
+        ),
+        ({"preset": "pmv_iso", "colors": ["bad"] * 7}, ValueError, "Invalid color"),
     ],
 )
 def test_invalid_preset_configuration(kwargs, error, message):
@@ -209,4 +231,13 @@ def test_invalid_preset_configuration(kwargs, error, message):
 def test_presets_reject_invalid_data(value):
     """Keep existing finite numeric input validation for preset users."""
     with pytest.raises(ValueError, match="non-numeric, non-finite, or missing"):
-        SummaryPlot(pd.DataFrame({"pmv": [value]})).set_regions(preset="pmv")
+        SummaryPlot(pd.DataFrame({"pmv": [value]})).set_regions(preset="pmv_iso")
+
+
+def test_pmv_presets_differ_only_on_a_boundary():
+    """A PMV of exactly 0.5 is Slightly Warm under ISO 7730 but Neutral under ASHRAE 55."""
+    frame = pd.DataFrame({"pmv": [0.5]})
+    iso = SummaryPlot(frame).set_regions(preset="pmv_iso").plot()
+    ashrae = SummaryPlot(frame).set_regions(preset="pmv_ashrae").plot()
+    assert iso.percentages.loc["Slightly Warm"] == 100
+    assert ashrae.percentages.loc["Neutral"] == 100
