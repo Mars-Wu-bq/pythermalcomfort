@@ -11,6 +11,9 @@ Unreleased
   ``disc`` is 6 when sweating can no longer cope. In that example ``wet`` changes from
   -1.69 to 0.71, ``disc`` from 1.32 to 6.0 and ``set`` from 52.6 °C to 42.4 °C
   (`#501 <https://github.com/pythermalcomfort/pythermalcomfort/issues/501>`_).
+* ``adaptive_ashrae`` now rounds reported IP temperatures to one decimal place
+  when ``round_output=True``, while preserving the existing SI comfort decisions
+  (`#428 <https://github.com/pythermalcomfort/pythermalcomfort/issues/428>`_).
 
 4.7.0 (2026-10-27)
 ------------------
