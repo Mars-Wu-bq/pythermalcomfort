@@ -118,6 +118,7 @@ def test_category_bins_properties() -> None:
     assert np.isnan(bins.map(200))
     with pytest.raises(TypeError):
         bins.edges[5.0] = "new"  # type: ignore[index]
+    hash(bins)  # usable as a dict key or in a set
 
 
 def test_unknown_model_raises() -> None:

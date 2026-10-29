@@ -2,7 +2,7 @@ import ast
 import inspect
 import warnings
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
 
@@ -236,8 +236,9 @@ class _CategoryBins:
         its lower edge, e.g. [-0.5, 0.5).
     """
 
-    edges: Mapping[float, str]
-    right: bool
+    # a mapping proxy is unhashable, so leave it out of the generated __hash__
+    edges: Mapping[float, str] = field(hash=False)
+    right: bool = True
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "edges", MappingProxyType(dict(self.edges)))
