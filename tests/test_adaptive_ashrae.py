@@ -16,7 +16,7 @@ def test_ip_temperature_rounding_preserves_acceptability(round_output: bool) -> 
         tr=temperatures,
         t_running_mean=running_mean,
         v=0.1,
-        round_output=round_output,
+        round_output=False,
     )
     ip = adaptive_ashrae(
         tdb=temperatures * 1.8 + 32,
@@ -36,10 +36,34 @@ def test_ip_temperature_rounding_preserves_acceptability(round_output: bool) -> 
     ):
         expected = getattr(si, field) * 1.8 + 32
         if round_output:
+            # rounded once, after the conversion to °F
             expected = np.around(expected, 1)
         np.testing.assert_allclose(getattr(ip, field), expected)
     np.testing.assert_array_equal(ip.acceptability_80, si.acceptability_80)
     np.testing.assert_array_equal(ip.acceptability_90, si.acceptability_90)
+
+
+@pytest.mark.parametrize("units", ["SI", "IP"])
+def test_round_output_never_changes_acceptability(units: str) -> None:
+    """round_output only rounds the reported temperatures (#500)."""
+    # the unrounded 80 % lower limit at t_running_mean=22 is 21.12 °C
+    to = np.array([21.11, 21.12, 21.13, 24.5, 27.5])
+    t_rm = 22.0
+    if units == "IP":
+        to, t_rm = to * 1.8 + 32, t_rm * 1.8 + 32
+    kwargs = dict(tdb=to, tr=to, t_running_mean=t_rm, v=0.1, units=units)
+    rounded = adaptive_ashrae(**kwargs, round_output=True)
+    unrounded = adaptive_ashrae(**kwargs, round_output=False)
+    np.testing.assert_array_equal(rounded.acceptability_80, unrounded.acceptability_80)
+    np.testing.assert_array_equal(rounded.acceptability_90, unrounded.acceptability_90)
+
+
+def test_issue_500_example_is_not_acceptable_for_either_rounding() -> None:
+    for round_output in (True, False):
+        result = adaptive_ashrae(
+            tdb=21.11, tr=21.11, t_running_mean=22.0, v=0.1, round_output=round_output
+        )
+        assert not result.acceptability_80
 
 
 def test_ip_scalar_comfort_temperatures_round_to_one_decimal() -> None:
